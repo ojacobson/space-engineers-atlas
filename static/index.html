@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Where in space are…</title>
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/bulma@0.9.1/css/bulma.min.css">
+</head>
+<body>
+    <section class="section">
+        <div class="container">
+            <h1 class="title">
+                Where in space are…
+            </h1>
+            <p class="block">
+                Drop your Space Engineers save files on the panels below to get
+                a list of GPS coordinates for planets and NPC stations.
+            </p>
+            <p class="block">
+                By default, your saves are in directories under
+                <kbd>C:\Users\USERNAME\AppData\Roaming\Roaming\SpaceEngineers\Saves\STEAMID64\</kbd>.
+                If you play on a server, ask your server administrator for a
+                copy of the server's save.
+            </p>
+        </div>
+    </section>
+    <section class="section">
+        <div class="container">
+            <div class="columns">
+                <div class="column">
+                    <h2 class="title">Planets</h2>
+                    <div class="tile notification drop-target-planets">
+                        <span class="msg-default">Drop your SANDBOX_0_0_0_.sbs file here…</span>
+                        <span class="msg-loading is-hidden">Processing</span>
+                    </div>
+                    <table class="table is-striped is-fullwidth gps-summary-planet">
+                        <thead>
+                            <tr>
+                                <th>Planet</th>
+                                <th>GPS</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        </tbody>
+                        <caption>
+                            <button class="button action-copy gps-data-planet" data-copy="">Copy all planets</button>
+                        </caption>
+                    </table>
+                    <p>
+                        Warning: SANDBOX_0_0_0_.sbs can be very large, and can
+                        take up to a minute to process. Please be patient.
+                    </p>
+                </div>
+                <div class="column">
+                    <h2 class="title">NPC stations</h2>
+                    <div class="tile notification drop-target-stations">
+                        <span class="msg-default">Drop your Sandbox.sbc file here…</span>
+                        <span class="msg-loading is-hidden">Processing</span>
+                    </div>
+                    <table class="table is-striped is-fullwidth gps-summary-station">
+                        <thead>
+                            <tr>
+                                <th>Faction</th>
+                                <th>GPS</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        </tbody>
+                        <caption>
+                            <button class="button action-copy gps-data-station" data-copy="">Copy all stations</button>
+                        </caption>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js" integrity="sha512-bLT0Qm9VnAYZDflyKcBaQ2gg0hSYNQrJ8RilYldYQ1FxQYoCLtUjuuRuZo+fjqhx/qtq/1itJ0C2ejDxltZVFg==" crossorigin="anonymous"></script>
+    <script>
+        $(() => {
+            $('body').on('click', '.action-copy', event => {
+                event.preventDefault();  
+                event.stopPropagation();
+                copy($(event.target).data('copy'));
+            })
+
+            function copy(value) {
+                let $area = $('<textarea>');
+                $area.val(value);
+                $('body').append($area);
+                $area.select();
+                document.execCommand("copy"); 
+                $area.remove();
+            }
+
+            $('.drop-target-planets').on('dragover', false);
+            $('.drop-target-planets').on('drop', event => {
+                event.preventDefault();  
+                event.stopPropagation();
+                dropPlanets(event.originalEvent);
+            });
+
+            $('.drop-target-stations').on('dragover', false);
+            $('.drop-target-stations').on('drop', event => {
+                event.preventDefault();  
+                event.stopPropagation();
+                dropStations(event.originalEvent);
+            });
+
+            function dropPlanets(event) {
+                if (event.dataTransfer.items)
+                    $(event.dataTransfer.items)
+                        .filter((_, item) => item.kind == 'file')
+                        .map((_, item) => item.getAsFile())
+                        .each((_, file) => displayPlanets(file));
+                else
+                    $(event.dataTransfer.files)
+                        .each((_, file) => displayPlanets(file));
+            }
+
+            function displayPlanets(file) {
+                $('.drop-target-planets .msg-default').addClass('is-hidden');
+                $('.drop-target-planets .msg-loading').removeClass('is-hidden');
+                let request = new Request('/planets', {
+                    method: 'POST',
+                    body: file.slice(),
+                });
+                fetch(request)
+                    .then(response => response.json())
+                    .then(json => {
+                        let $tbody = $('.gps-summary-planet tbody');
+                        $tbody.empty();
+                        json.forEach(entry => {
+                            let $row = $(
+                                '<tr><td class="field-name"></td><td class="field-gps is-family-monospace"></td></tr>'
+                            );
+                            $('.field-name', $row).text(entry.name);
+                            $('.field-gps', $row).text(entry.gps);
+                            $tbody.append($row);
+                        });
+                        $('.gps-data-planet').data(
+                            'copy',
+                            json
+                                .map(entry => entry.gps)
+                                .join("\n")
+                        );
+                    })
+                    .finally(() => {
+                        $('.drop-target-planets .msg-default').removeClass('is-hidden');
+                        $('.drop-target-planets .msg-loading').addClass('is-hidden');
+                    });
+            }
+
+            function dropStations(event) {
+                if (event.dataTransfer.items)
+                    $(event.dataTransfer.items)
+                        .filter((_, item) => item.kind == 'file')
+                        .map((_, item) => item.getAsFile())
+                        .each((_, file) => displayStations(file));
+                else
+                    $(event.dataTransfer.files)
+                        .each((_, file) => displayStations(file));
+            }
+
+            function displayStations(file) {
+                $('.drop-target-stations .msg-default').addClass('is-hidden');
+                $('.drop-target-stations .msg-loading').removeClass('is-hidden');
+                let request = new Request('/stations', {
+                    method: 'POST',
+                    body: file.slice(),
+                });
+                fetch(request)
+                    .then(response => response.json())
+                    .then(json => {
+                        let $tbody = $('.gps-summary-station tbody');
+                        $tbody.empty();
+                        json.forEach(entry => {
+                            let $row = $(
+                                '<tr><td class="field-tag"></td><td class="field-gps is-family-monospace"></td></tr>'
+                            );
+                            $('.field-tag', $row).text(entry.tag);
+                            $('.field-gps', $row).text(entry.gps);
+                            $tbody.append($row);
+                        });
+                        $('.gps-data-station').data(
+                            'copy',
+                            json
+                                .map(entry => entry.gps)
+                                .join("\n")
+                        );
+                    })
+                    .finally(() => {
+                        $('.drop-target-stations .msg-default').removeClass('is-hidden');
+                        $('.drop-target-stations .msg-loading').addClass('is-hidden');
+                    });
+            }
+
+        });
+    </script>
+</body>
+</html>
